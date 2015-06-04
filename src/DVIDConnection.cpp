@@ -1,3 +1,5 @@
+#include <cstring>
+
 #include "DVIDConnection.h"
 #include "DVIDException.h"
 
@@ -29,8 +31,10 @@ WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp)
 
 namespace libdvid {
 
+const int DVIDConnection::DEFAULT_TIMEOUT;
+
 //! Defines DVID prefix -- this might have a version ID eventually 
-string DVIDConnection::DVID_PREFIX = "/api";
+const char* DVIDConnection::DVID_PREFIX = "/api";
 
 DVIDConnection::DVIDConnection(string addr_) : addr(addr_)
 {
@@ -62,7 +66,8 @@ int DVIDConnection::make_request(string endpoint, ConnectionMethod method,
         headers = curl_slist_append(headers, "Content-Type: application/octet-stream");
     } 
     curl_easy_setopt(curl_connection, CURLOPT_HTTPHEADER, headers);
-    
+    curl_easy_setopt(curl_connection, CURLOPT_NOSIGNAL, 1);
+
     // load url
     string url = get_uri_root() + endpoint;
     curl_easy_setopt(curl_connection, CURLOPT_URL, url.c_str());
@@ -110,6 +115,7 @@ int DVIDConnection::make_request(string endpoint, ConnectionMethod method,
 
     // set error buffer
     char error_buf[CURL_ERROR_SIZE]; // size of the error buffer
+    memset(error_buf, 0, CURL_ERROR_SIZE);
     curl_easy_setopt(curl_connection, CURLOPT_ERRORBUFFER, error_buf);
 
     // actually perform the request

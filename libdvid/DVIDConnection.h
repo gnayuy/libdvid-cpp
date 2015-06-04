@@ -38,7 +38,7 @@ class DVIDConnection {
     /*!
      * Starts curl connection.
     */
-    DVIDConnection(std::string addr_);
+    explicit DVIDConnection(std::string addr_);
   
     /*!
      * Copy constructor to ensure that creation of curl connection
@@ -68,7 +68,7 @@ class DVIDConnection {
     */ 
     int make_request(std::string endpoint, ConnectionMethod method, BinaryDataPtr payload,
             BinaryDataPtr results, std::string& error_msg, ConnectionType type=DEFAULT,
-            int timeout=TIMEOUT); 
+            int timeout=DEFAULT_TIMEOUT);
 
     /*!
      * Get the address for the DVID connection.
@@ -86,11 +86,14 @@ class DVIDConnection {
         return (addr + DVID_PREFIX);
     }
 
+    //! default timeout in seconds
+    static const int DEFAULT_TIMEOUT = 60;
+
   private:
     /*!
      * Assignment doesn't really make much sense -- just disable.
     */
-    DVIDConnection& operator=(const DVIDConnection& connection) {}
+    DVIDConnection& operator=(const DVIDConnection& connection);
 
     //! reuse curl connection -- eventually make this thread static and
     //! initialize once (CURL typedef is actually a void*)
@@ -100,10 +103,7 @@ class DVIDConnection {
     std::string addr;
 
     //! prefix for all DVID calls (versioning may be added here in the future) 
-    static std::string DVID_PREFIX;
-
-    //! default timeout in seconds
-    static const int TIMEOUT = 60;
+    static const char* DVID_PREFIX;
 };
 
 }

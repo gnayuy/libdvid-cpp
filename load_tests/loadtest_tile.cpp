@@ -14,6 +14,7 @@
 */
 
 #include <libdvid/DVIDNodeService.h>
+#include <libdvid/DVIDThreadedFetch.h>
 #include "ScopeTime.h"
 
 #include <iostream>
@@ -42,6 +43,7 @@ int FETCHSIZE = 1024;
 */
 int main(int argc, char** argv)
 {
+    cout << "Blah!!" << endl;
     // must point to a DVID instance with tiles (with name tile name) and
     // starting voxel coordinates
     if (argc != 7 && argc != 8) {
@@ -83,7 +85,7 @@ int main(int argc, char** argv)
 
         // assuming a 1024x1024 window, 9 tiles could be needed if the window
         // is not completely aligned to tile space
-        vector<unsigned int> tilepos;
+        vector<int> tilepos;
         tilepos.push_back(0);
         tilepos.push_back(0);
         tilepos.push_back(zstart);
@@ -97,44 +99,45 @@ int main(int argc, char** argv)
             tilepos[2] = z;
             int bytes_read = 0;
 
+
+            vector<vector<int> > tilepos_array;
+
+
             tilepos[0] = xstart / TILESIZE;
             tilepos[1] = ystart / TILESIZE;
-            BinaryDataPtr dum1 = dvid_node.get_tile_slice_binary(tilename, XY, 1, tilepos); 
-            bytes_read += dum1->length();            
+            tilepos_array.push_back(tilepos);
 
             tilepos[0] += 1;
-            BinaryDataPtr dum2 = dvid_node.get_tile_slice_binary(tilename, XY, 1, tilepos); 
-            bytes_read += dum2->length();            
+            tilepos_array.push_back(tilepos);
 
             tilepos[0] += 1;
-            BinaryDataPtr dum3 = dvid_node.get_tile_slice_binary(tilename, XY, 1, tilepos); 
-            bytes_read += dum3->length();            
+            tilepos_array.push_back(tilepos);
 
             tilepos[0] -= 2;
             tilepos[1] += 1;
-            BinaryDataPtr dum4 = dvid_node.get_tile_slice_binary(tilename, XY, 1, tilepos); 
-            bytes_read += dum4->length();            
+            tilepos_array.push_back(tilepos);
 
             tilepos[0] += 1;
-            BinaryDataPtr dum5 = dvid_node.get_tile_slice_binary(tilename, XY, 1, tilepos); 
-            bytes_read += dum5->length();            
+            tilepos_array.push_back(tilepos);
 
             tilepos[0] += 1;
-            BinaryDataPtr dum6 = dvid_node.get_tile_slice_binary(tilename, XY, 1, tilepos); 
-            bytes_read += dum6->length();            
+            tilepos_array.push_back(tilepos);
 
             tilepos[0] -= 2;
             tilepos[1] += 1;
-            BinaryDataPtr dum7 = dvid_node.get_tile_slice_binary(tilename, XY, 1, tilepos); 
-            bytes_read += dum7->length();            
+            tilepos_array.push_back(tilepos);
 
             tilepos[0] += 1;
-            BinaryDataPtr dum8 = dvid_node.get_tile_slice_binary(tilename, XY, 1, tilepos); 
-            bytes_read += dum8->length();            
+            tilepos_array.push_back(tilepos);
 
             tilepos[0] += 1;
-            BinaryDataPtr dum9 = dvid_node.get_tile_slice_binary(tilename, XY, 1, tilepos); 
-            bytes_read += dum9->length();            
+            tilepos_array.push_back(tilepos);
+            
+
+            vector<BinaryDataPtr> tiles = get_tile_array_binary(dvid_node, tilename, XY, 0, tilepos_array, 0);
+            for (int i = 0; i < tiles.size(); ++i) {
+                bytes_read += tiles[i]->length();
+            }
 
             total_bytes_read += bytes_read;
             double read_time = tile_timer.getElapsed();
@@ -144,8 +147,11 @@ int main(int argc, char** argv)
         cout << "Read " << total_bytes_read << " bytes (" << NUM_FETCHES << " tile planes) in " << total_read_time << " seconds" << endl;
         cout << "Frame rate: " << total_read_time / NUM_FETCHES * 1000 << " milliseconds" << endl;
 
+
+        exit(0);
+
         // size for gray and label fetch
-        vector<unsigned int> start;
+        vector<int> start;
         start.push_back(xstartm); start.push_back(ystartm); start.push_back(zstart);
         Dims_t lsizes;
         lsizes.push_back(FETCHSIZE); lsizes.push_back(FETCHSIZE); lsizes.push_back(1);
@@ -160,7 +166,7 @@ int main(int argc, char** argv)
             for (int z = zstart; z < (zstart+NUM_FETCHES); ++z) {
                 ScopeTime get_timer(false);
                 start[2] = z;
-                Labels3D labelcomp = dvid_node.get_labels3D(segname, lsizes, start);
+                Labels3D labelcomp = dvid_node.get_labels3D(segname, lsizes, start, false);
                 double read_time = get_timer.getElapsed();
                 cout << "Read " << bytes_read << " bytes in " << read_time << " seconds" << endl;
             }
@@ -180,7 +186,7 @@ int main(int argc, char** argv)
         for (int z = zstart; z < (zstart+NUM_FETCHES); ++z) {
             ScopeTime get_timer(false);
             start[2] = z;
-            Grayscale3D graycomp = dvid_node.get_gray3D("grayscale", lsizes, start);
+            Grayscale3D graycomp = dvid_node.get_gray3D("grayscale", lsizes, start, false);
             double read_time = get_timer.getElapsed();
             cout << "Read " << bytes_read << " bytes in " << read_time << " seconds" << endl;
         }

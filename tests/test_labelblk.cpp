@@ -69,14 +69,14 @@ int main(int argc, char** argv)
         // ** Write and read labelblk data **
         
         // create label 64 image volume
-        unsigned long long * img_labels = new unsigned long long [BLK_SIZE*BLK_SIZE*BLK_SIZE];
+        uint64 * img_labels = new uint64 [BLK_SIZE*BLK_SIZE*BLK_SIZE];
         for (int i = 0; i < (LWIDTH*LHEIGHT); ++i) {
             img_labels[i] = limg1_mask[i];
             img_labels[i+BLK_SIZE*BLK_SIZE] = limg2_mask[i];
         }
 
         // create binary data string wrapper (64 bits per pixel)
-        vector<unsigned int> start; start.push_back(0); start.push_back(0); start.push_back(0);
+        vector<int> start; start.push_back(0); start.push_back(0); start.push_back(0);
 
         // post labels volume
         Dims_t lsizes; lsizes.push_back(BLK_SIZE); lsizes.push_back(BLK_SIZE); lsizes.push_back(BLK_SIZE);
@@ -86,13 +86,14 @@ int main(int argc, char** argv)
         // retrieve the image volume and make sure it makes the posted volume
         Labels3D labelcomp = dvid_node.get_labels3D(label_datatype_name, lsizes, start);
         
-        const unsigned long long* labeldatacomp = labelcomp.get_raw();
+        const uint64* labeldatacomp = labelcomp.get_raw();
         for (int i = 0; i < BLK_SIZE*BLK_SIZE*BLK_SIZE; ++i) {
             if (labeldatacomp[i] != img_labels[i]) {
                 cerr << "Read/write mismatch" << endl;
                 return -1;
             }
         }
+        delete []img_labels;
     } catch (std::exception& e) {
         cerr << e.what() << endl;
         return -1;

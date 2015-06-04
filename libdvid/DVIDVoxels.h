@@ -12,7 +12,9 @@
 #include "Globals.h"
 
 #include <string>
+#include <sstream>
 #include <vector>
+#include <boost/foreach.hpp>
 
 namespace libdvid {
 
@@ -31,6 +33,10 @@ typedef std::vector<unsigned int> Dims_t;
 template <typename T, unsigned int N>
 class DVIDVoxels {
   public:
+
+    typedef T voxel_type;
+    const static int num_dims = N;
+
     /*!
      * Construtor takes a constant buffer, creates a binary
      * buffer of a certain length and associates it with
@@ -53,16 +59,23 @@ class DVIDVoxels {
             throw ErrMsg("Incorrect dimensions provided");
         }
 
-        unsigned long long total = 0;
-        for (int i = 0; i < dims.size(); ++i) {
+        uint64 total = 0;
+        for (unsigned int i = 0; i < dims.size(); ++i) {
             if (i == 0) {
                 total = dims[0];
             } else {
                 total *= dims[i];
             }
         }
-        if (total*sizeof(T) != data->length()) {
-            throw ErrMsg("Dimension mismatch with buffer size");
+        if (total*sizeof(T) != (uint64)(data->length())) {
+            std::stringstream ssMsg;
+            ssMsg << "Dimensions ( ";
+            BOOST_FOREACH( Dims_t::value_type d, dims )
+            {
+                ssMsg << d << " ";
+            }
+            ssMsg << ") do not match buffer size (" << data->length() << ").";
+            throw ErrMsg( ssMsg.str() );
         }
     }
 
@@ -78,15 +91,15 @@ class DVIDVoxels {
         if (dims.size() != N) {
             throw ErrMsg("Incorrect dimensions provided");
         }
-        unsigned long long total = 0;
-        for (int i = 0; i < dims.size(); ++i) {
+        uint64 total = 0;
+        for (unsigned int i = 0; i < dims.size(); ++i) {
             if (i == 0) {
                 total = dims[0];
             } else {
                 total *= dims[i];
             }
         }
-        if (total*sizeof(T) != data->length()) {
+        if (total*sizeof(T) != (uint64)(data->length())) {
             throw ErrMsg("Dimension mismatch with buffer size");
         }
     }
@@ -103,7 +116,7 @@ class DVIDVoxels {
      * Retrieve binary data for the given volume.
      * \return binary data for volume
     */
-    BinaryDataPtr get_binary()
+    BinaryDataPtr get_binary() const
     {
         return data;
     }
@@ -121,7 +134,7 @@ class DVIDVoxels {
      * Get the dimensions of this volume.
      * \return volume dimensions
     */
-    Dims_t get_dims() const
+    Dims_t const & get_dims() const
     {
         return dims;
     }

@@ -3,6 +3,8 @@ project (libdvidcpp)
 
 include (ExternalProject)
 
+enable_testing()
+
 set (RUN_ENVIRONMENT "Workstation" CACHE TYPE STRING)
 if (NOT CMAKE_BUILD_TYPE)
     set (CMAKE_BUILD_TYPE Release)
@@ -31,6 +33,9 @@ if (${BUILDEM_DIR} STREQUAL "None")
 else()
     set (BUILDLOC ${BUILDEM_DIR})
 endif()
+
+
+set (LIBDVID_WRAP_PYTHON NO CACHE BOOL "Build the libdvid python bindings (requires boost_python)")
 
 if (NOT ${BUILDEM_DIR} STREQUAL "None")
     ###############################################################################
@@ -66,27 +71,57 @@ if (NOT ${BUILDEM_DIR} STREQUAL "None")
     include (libcurl)
     include (lz4)
     include (boost)
-
+    include (numpy)
+    
     set (LIBDVID_DEPS ${jsoncpp_NAME} ${libpng_NAME} ${libcurl_NAME}
-        ${libjpeg_NAME} ${lz4_NAME} ${boost_NAME})
-    set (boost_LIBS ${BUILDEM_LIB_DIR}/libboost_system.so)
-    set (support_LIBS ${json_LIB} ${boost_LIBS} ${BUILDEM_LIB_DIR}/libpng.so ${BUILDEM_LIB_DIR}/libcurl.so ${BUILDEM_LIB_DIR}/libjpeg.so ${BUILDEM_LIB_DIR}/liblz4.so )
-    #set (support_LIBS ${json_LIB} ${CPPNETLIB_LIBRARIES} ${boost_LIBS} ${BUILDEM_LIB_DIR}/libssl.so ${BUILDEM_LIB_DIR}/libcrypto.so ${BUILDEM_LIB_DIR}/libpng.so curl)
+        ${libjpeg_NAME} ${lz4_NAME} ${boost_NAME} ${numpy_NAME})
+    set (boost_LIBS ${BUILDEM_LIB_DIR}/libboost_thread.${BUILDEM_PLATFORM_DYLIB_EXTENSION} ${BUILDEM_LIB_DIR}/libboost_system.${BUILDEM_PLATFORM_DYLIB_EXTENSION})
+    if (LIBDVID_WRAP_PYTHON)
+        include (python)
+        # CMake's built-in PythonInterp module for the FIND_PACKAGE() macro uses  
+        # the PYTHON_EXECUTABLE cache variable as the authority on where python is.
+        # Set it to the BuildEM Python location.
+        set(PYTHON_EXECUTABLE ${PYTHON_EXE})
+        set(boostpython_LIB ${BUILDEM_LIB_DIR}/libboost_python.${BUILDEM_PLATFORM_DYLIB_EXTENSION})        
+    endif()
+    set (support_LIBS ${json_LIB} 
+                      ${boost_LIBS} 
+                      ${BUILDEM_LIB_DIR}/libpng.${BUILDEM_PLATFORM_DYLIB_EXTENSION} 
+                      ${BUILDEM_LIB_DIR}/libcurl.${BUILDEM_PLATFORM_DYLIB_EXTENSION} 
+                      ${BUILDEM_LIB_DIR}/libjpeg.${BUILDEM_PLATFORM_DYLIB_EXTENSION} 
+                      ${BUILDEM_LIB_DIR}/liblz4.${BUILDEM_PLATFORM_DYLIB_EXTENSION} )
 else ()
     FIND_PACKAGE(Boost)
     include_directories(${Boost_INCLUDE_DIR})
 
     set (json_LIB jsoncpp)
-    set (boost_LIBS boost_system)
-    set (support_LIBS ${json_LIB} ${boost_LIBS} png curl jpeg lz4)
-    #set (support_LIBS ${json_LIB} ${CPPNETLIB_LIBRARIES} ${boost_LIBS} ssl crypto png curl)
-    #set (LIBDVID_EXT_LIBS ${CPPNETLIB_LIBRARIES})
+    set (boost_LIBS boost_thread boost_system)
+    if (LIBDVID_WRAP_PYTHON)
+        set(boostpython_LIB boost_python)
+    endif()
+
+    FIND_PACKAGE(PNG REQUIRED)
+    FIND_PACKAGE(JPEG REQUIRED)
+    FIND_PACKAGE(CURL REQUIRED)
+    FIND_LIBRARY(LZ4_LIBRARY lz4)
+    if (NOT LZ4_LIBRARY)
+        message(FATAL_ERROR "*** Could not find lz4 library ***")
+    endif()    
+
+    set (support_LIBS ${json_LIB} ${boost_LIBS} ${PNG_LIBRARIES} ${CURL_LIBRARIES} ${JPEG_LIBRARIES} ${LZ4_LIBRARY})
 endif (NOT ${BUILDEM_DIR} STREQUAL "None")
 
 include_directories (BEFORE ${CMAKE_SOURCE_DIR}/libdvid ${CMAKE_SOURCE_DIR})
 
+if (NOT MSVC)
+    # The -fPIC flag is necessary for "relocatable" code that might be included in an .so
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
+endif()
+
 # Compile libdvidcpp library components
-add_library (dvidcpp src/DVIDNodeService.cpp src/DVIDServerService.cpp src/DVIDConnection.cpp src/DVIDException.cpp src/DVIDGraph.cpp src/BinaryData.cpp)
+add_library (dvidcpp src/DVIDNodeService.cpp src/DVIDServerService.cpp
+    src/DVIDConnection.cpp src/DVIDException.cpp src/DVIDGraph.cpp
+    src/BinaryData.cpp src/DVIDThreadedFetch.cpp)
 target_link_libraries (dvidcpp ${LIBDVID_EXT_LIBS})
 if (NOT ${BUILDEM_DIR} STREQUAL "None")
     add_dependencies (dvidcpp ${LIBDVID_DEPS})
@@ -124,6 +159,10 @@ else()
     )
 endif()
 
+if (LIBDVID_WRAP_PYTHON)
+    add_subdirectory(python)    
+endif()
+
 add_executable(dvidtest_newrepo "tests/test_newrepo.cpp")
 target_link_libraries(dvidtest_newrepo dvidcpp ${support_LIBS})
 
@@ -148,8 +187,14 @@ target_link_libraries(dvidtest_compression dvidcpp ${support_LIBS})
 add_executable(dvidtest_blocks "tests/test_blocks.cpp")
 target_link_libraries(dvidtest_blocks dvidcpp ${support_LIBS})
 
+add_executable(dvidtest_roi "tests/test_roi.cpp")
+target_link_libraries(dvidtest_roi dvidcpp ${support_LIBS})
+
 add_executable(dvidloadtest_labelblk "load_tests/loadtest_labelblk.cpp")
 target_link_libraries(dvidloadtest_labelblk dvidcpp ${support_LIBS})
+
+add_executable(dvidtest_body "tests/test_body.cpp")
+target_link_libraries(dvidtest_body dvidcpp ${support_LIBS})
 
 add_executable(dvidloadtest_labelgraph "load_tests/loadtest_labelgraph.cpp")
 target_link_libraries(dvidloadtest_labelgraph dvidcpp ${support_LIBS})
@@ -157,7 +202,8 @@ target_link_libraries(dvidloadtest_labelgraph dvidcpp ${support_LIBS})
 add_executable(dvidloadtest_tile "load_tests/loadtest_tile.cpp")
 target_link_libraries(dvidloadtest_tile dvidcpp ${support_LIBS})
 
-enable_testing()
+add_executable(dvidloadtest_sparsegray "load_tests/loadtest_sparsegray.cpp")
+target_link_libraries(dvidloadtest_sparsegray dvidcpp ${support_LIBS})
 
 add_test(
     newrepo
@@ -190,7 +236,7 @@ add_test(
 )
 
 add_test(
-    compression 
+    compression
     dvidtest_compression
     ${CMAKE_SOURCE_DIR}/tests/inputs/testimage.jpeg
     ${CMAKE_SOURCE_DIR}/tests/inputs/testimage.png
@@ -202,3 +248,12 @@ add_test(
     dvidtest_blocks http://127.0.0.1:8000
 )
 
+add_test(
+    roi
+    dvidtest_roi http://127.0.0.1:8000
+)
+
+add_test(
+    body 
+    dvidtest_body http://127.0.0.1:8000
+)

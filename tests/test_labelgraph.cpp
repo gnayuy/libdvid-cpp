@@ -60,7 +60,7 @@ int main(int argc, char** argv)
        
         // get vertex and edge weight 
         Graph graph_initial;
-        dvid_node.get_vertex_neighbors(graph_datatype_name, 1, graph_initial);
+        dvid_node.get_vertex_neighbors(graph_datatype_name, Vertex(1), graph_initial);
         double weight_initial = graph_initial.vertices[0].weight;
         double edge_weight_initial = graph_initial.edges[0].weight;
         if (graph_initial.vertices[1].id == 1) {
@@ -81,7 +81,7 @@ int main(int argc, char** argv)
 
         // get vertex and edge updated weight 
         Graph graph_final;
-        dvid_node.get_vertex_neighbors(graph_datatype_name, 1, graph_final);
+        dvid_node.get_vertex_neighbors(graph_datatype_name, Vertex(1), graph_final);
         double weight_final = graph_final.vertices[0].weight;
         double edge_weight_final = graph_final.edges[0].weight;
         if (graph_final.vertices[1].id == 1) {
@@ -119,7 +119,7 @@ int main(int argc, char** argv)
                 dvid_node.get_properties(graph_datatype_name, prop_vertices,
                         "features", properties, transactions); 
 
-                for (int i = 0; i < prop_vertices.size(); ++i) {
+                for (unsigned int i = 0; i < prop_vertices.size(); ++i) {
                     // increment properties
                     if (properties[i]->get_data().length() > 0) {
                         double* val_array = (double*) properties[i]->get_raw();
@@ -160,7 +160,7 @@ int main(int argc, char** argv)
                 dvid_node.get_properties(graph_datatype_name, prop_edges,
                         "efeatures", properties, transactions); 
 
-                for (int i = 0; i < prop_edges.size(); ++i) {
+                for (unsigned int i = 0; i < prop_edges.size(); ++i) {
                     // increment properties
                     if (properties[i]->get_data().length() > 0) {
                         double* val_array = (double*) properties[i]->get_raw();

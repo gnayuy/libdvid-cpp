@@ -18,6 +18,7 @@
 #include "DVIDGraph.h"
 #include "DVIDConnection.h"
 #include "DVIDBlocks.h"
+#include "DVIDRoi.h"
 
 #include <json/value.h>
 #include <vector>
@@ -67,7 +68,8 @@ class DVIDNodeService {
     Json::Value get_typeinfo(std::string datatype_name);
 
     /************* API to create datatype instances **************/
-    // TODO: pass configuration data
+    // TODO: pass configuration data.
+    // WARNING: DO NOT USE '-' IN NAMES FOR NOW
     
     /*!
      * Create an instance of uint8 grayscale datatype.
@@ -77,11 +79,17 @@ class DVIDNodeService {
     bool create_grayscale8(std::string datatype_name);
     
     /*!
-     * Create an instance of uint64 labelblk datatype.
+     * Create an instance of uint64 labelblk datatype and optionally
+     * create a label volume datatype.  WARNING: If the function returns false
+     * and a label volume is requested it is possible that the two
+     * datatypes created will not be synced together.  Currently,
+     * the syncing configuration needs to be set on creation.
      * \param datatype_name name of new datatype instance
-     * \return true if create, false if already exists
+     * \param labelvol_name name of labelvolume to associate with labelblks
+     * \return true if both created, false if one already exists
     */
-    bool create_labelblk(std::string datatype_name);
+    bool create_labelblk(std::string datatype_name,
+            std::string labelvol_name = "");
     
     /*!
      * Create an instance of keyvalue datatype.
@@ -92,10 +100,17 @@ class DVIDNodeService {
     
     /*!
      * Create an instance of labelgraph datatype.
-     * \param datatype_name name of new datatype instance
+     * \param name name of new datatype instance
      * \return true if create, false if already exists
     */
     bool create_graph(std::string name);
+
+    /*!
+     * Create an instance of ROI datatype.
+     * \param name name of new datatype instance
+     * \return true if create, false if already exists
+    */
+    bool create_roi(std::string name);
 
     /********** API to access labels and grayscale data **********/   
     // TODO: maybe support custom byte buffers for getting and putting 
@@ -110,7 +125,7 @@ class DVIDNodeService {
      * \return 2D grayscale object that wraps a byte buffer
     */ 
     Grayscale2D get_tile_slice(std::string datatype_instance, Slice2D slice,
-            unsigned int scaling, std::vector<unsigned int> tile_loc);
+            unsigned int scaling, std::vector<int> tile_loc);
 
     /*!
      * Retrive the raw pre-computed tile (no decompression) from
@@ -120,11 +135,11 @@ class DVIDNodeService {
      * \param datatype_instance name of tile type instance
      * \param slice specify XY, YZ, or XZ
      * \param scaling specify zoom level (1=max res)
-     * \param tile_loc X,Y,Z location of tile (X and Y are in block coordinates
+     * \param tile_loc e.g., X,Y,Z location of tile (X and Y are in block coordinates
      * \return byte buffer for the raw compressed data stored (e.g, JPEG or PNG) 
     */ 
     BinaryDataPtr get_tile_slice_binary(std::string datatype_instance, Slice2D slice,
-            unsigned int scaling, std::vector<unsigned int> tile_loc);
+            unsigned int scaling, std::vector<int> tile_loc);
 
     /*!
      * Retrive a 3D 1-byte grayscale volume with the specified
@@ -146,7 +161,7 @@ class DVIDNodeService {
      * \return 3D grayscale object that wraps a byte buffer
     */
     Grayscale3D get_gray3D(std::string datatype_instance, Dims_t dims,
-            std::vector<unsigned int> offset, bool throttle=true,
+            std::vector<int> offset, bool throttle=true,
             bool compress=false, std::string roi="");
 
     /*!
@@ -171,7 +186,7 @@ class DVIDNodeService {
      * \return 3D grayscale object that wraps a byte buffer
     */
     Grayscale3D get_gray3D(std::string datatype_instance, Dims_t dims,
-            std::vector<unsigned int> offset,
+            std::vector<int> offset,
             std::vector<unsigned int> channels, bool throttle=true,
             bool compress=false, std::string roi="");
     
@@ -195,7 +210,7 @@ class DVIDNodeService {
      * \return 3D label object that wraps a byte buffer
     */
     Labels3D get_labels3D(std::string datatype_instance, Dims_t dims,
-            std::vector<unsigned int> offset, bool throttle=true,
+            std::vector<int> offset, bool throttle=true,
             bool compress=true, std::string roi="");
    
     /*!
@@ -220,9 +235,20 @@ class DVIDNodeService {
      * \return 3D label object that wraps a byte buffer
     */
     Labels3D get_labels3D(std::string datatype_instance, Dims_t dims,
-            std::vector<unsigned int> offset,
+            std::vector<int> offset,
             std::vector<unsigned int> channels, bool throttle=true,
             bool compress=true, std::string roi="");
+
+    /*
+     * Retrieve label id at the specified point.  If no ID is found, return 0.
+     * \param datatype_instance name of the labelblk type instance
+     * \param x x location
+     * \param y y location
+     * \param z z location
+     * \return body id for given location (0 if none found)
+    */
+    uint64 get_label_by_location(std::string datatype_instance, unsigned int x,
+            unsigned int y, unsigned int z);
 
     /*!
      * Put a 3D 1-byte grayscale volume to DVID with the specified
@@ -242,8 +268,8 @@ class DVIDNodeService {
      * \param throttle allow only one request at time (default: true)
      * \param compress enable lz4 compression
     */
-    void put_gray3D(std::string datatype_instance, Grayscale3D& volume,
-            std::vector<unsigned int> offset, bool throttle=true,
+    void put_gray3D(std::string datatype_instance, Grayscale3D const & volume,
+            std::vector<int> offset, bool throttle=true,
             bool compress=false);
 
     /*!
@@ -265,8 +291,8 @@ class DVIDNodeService {
      * \param roi specify DVID roi to mask PUT operation (default: empty)
      * \param compress enable lz4 compression
     */
-    void put_labels3D(std::string datatype_instance, Labels3D& volume,
-            std::vector<unsigned int> offset, bool throttle=true,
+    void put_labels3D(std::string datatype_instance, Labels3D const & volume,
+            std::vector<int> offset, bool throttle=true,
             bool compress=true, std::string roi="");
 
     /************** API to access DVID blocks directly **************/
@@ -280,12 +306,12 @@ class DVIDNodeService {
      * returned structure. 
      * TODO: support compression and throttling.
      * \param datatype instance name of grayscale type instance
-     * \param block_coords location of first block in span (block coordinates)
+     * \param block_coords location of first block in span (block coordinates) (X,Y,Z)
      * \param span number of blocks to attemp to read
      * \return grayscale blocks
     */
     GrayscaleBlocks get_grayblocks(std::string datatype_instance,
-           std::vector<unsigned int> block_coords, unsigned int span); 
+           std::vector<int> block_coords, unsigned int span); 
 
     /*!
      * Fetch label blocks from DVID.  The call will fetch
@@ -294,12 +320,12 @@ class DVIDNodeService {
      * returned structure.
      * TODO: support compression and throttling.
      * \param datatype instance name of labelblk type instance
-     * \param block_coords location of first block in span (block coordinates)
+     * \param block_coords location of first block in span (block coordinates) (X,Y,Z)
      * \param span number of blocks to attemp to read
      * \return grayscale blocks
     */
     LabelBlocks get_labelblocks(std::string datatype_instance,
-           std::vector<unsigned int> block_coords, unsigned int span);
+           std::vector<int> block_coords, unsigned int span);
 
     /*!
      * Put grayscale blocks to DVID.   The call will put
@@ -308,10 +334,10 @@ class DVIDNodeService {
      * TODO: support compression and throttling.
      * \param datatype instance name of grayscale type instance
      * \param blocks stores buffer for array of blocks
-     * \param block_coords location of first block in span (block coordinates)
+     * \param block_coords location of first block in span (block coordinates) (X,Y,Z)
     */
     void put_grayblocks(std::string datatype_instance,
-            GrayscaleBlocks blocks, std::vector<unsigned int> block_coords);
+            GrayscaleBlocks blocks, std::vector<int> block_coords);
     
     /*!
      * Put label blocks to DVID.   The call will put
@@ -321,10 +347,10 @@ class DVIDNodeService {
      * NOTE: UNTESTED (DVID DOES NOT YET SUPPORT)
      * \param datatype instance name of labelblk type instance
      * \param blocks stores buffer for array of blocks
-     * \param block_coords location of first block in span (block coordinates)
+     * \param block_coords location of first block in span (block coordinates) (X,Y,Z)
     */
     void put_labelblocks(std::string datatype_instance,
-            LabelBlocks blocks, std::vector<unsigned int> block_coords);
+            LabelBlocks blocks, std::vector<int> block_coords);
 
     /*************** API to access keyvalue interface ***************/
     
@@ -491,13 +517,103 @@ class DVIDNodeService {
             std::vector<BinaryDataPtr>& properties,
             VertexTransactions& transactions,
             std::vector<Edge>& leftover_edges);
+    
+    /************** API to access ROI interface **************/
+    // Currently, there is no API to work directly on the RLE
+    // encoded blocks.  This might lead to excessive memory use
+    // and runtime for some use cases.  Furthermore, this API
+    // handles block and substack ordering (regardless of whether
+    // it is necessary or whether it is already sorted).  This
+    // might lead to some runtime inefficiencies.
+
+    /*!
+     * Load an ROI defined by a list of blocks.  This command
+     * will extend the ROI if it defines blocks outside of the
+     * currently defined ROI.  The blocks can be provided in
+     * any order.
+     * \param roi_name name of the roi instance
+     * \param blockcoords vector of block coordinates
+    */
+    void post_roi(std::string roi_name,
+            const std::vector<BlockXYZ>& blockcoords);
+   
+    /*!
+     * Retrieve an ROI and store in a vector of block coordinates.
+     * The blocks returned will be ordered by Z then Y then X.
+     * \param roi_name name of the roi instance
+     * \param blockcoords vector of block coordinates retrieved
+    */
+    void get_roi(std::string roi_name,
+            std::vector<BlockXYZ>& blockcoords);
+    
+    /*!
+     * Retrieve a partition of the ROI covered by substacks
+     * of the specified partition size.  The substacks will be ordered
+     * by Z then Y then X.
+     * \param roi_name name of the roi instance
+     * \param substacks vector of substacks that coer the ROI
+     * \param partition_size substack size as number of blocks in one dimension
+     * \return fraction of substack volume that cover blocks (packing factor)
+    */
+    double get_roi_partition(std::string roi_name,
+            std::vector<SubstackXYZ>& substacks, unsigned int partition_size);
+
+    /*!
+     * Check whether a list of points (any order) exists in
+     * the given ROI.  A vector of true and false has the same order
+     * as the list of points.
+     * \param roi_name name of the roi instance
+     * \param points list of X,Y,Z points
+     * \param inroi list of true/false on whether points are in the ROI
+    */
+    void roi_ptquery(std::string roi_name,
+            const std::vector<PointXYZ>& points,
+            std::vector<bool>& inroi);
+
+    /************** API to access sparse body interface **************/
+    // The current functionality is working over the coarse volume
+    // endpoint available in DVID.  The coarse volume is just a list of
+    // blocks that intersect the body.  Some of the functions are
+    // workarounds or approximations that use the coarse volume.
+
+    /*!
+     * Determine whether body exists in labelvolume.
+     * \param labelvol_name name of label volume type
+     * \param bodyid body id being queried
+     * \return true if in label volume, false otherwise
+    */
+    bool body_exists(std::string labelvol_name, uint64 bodyid);
+
+    /*!
+     * Find a point in the center of the  body (currently an
+     * approximate location is chosen).  If a third dimension coordinate
+     * is provided, a point is provided within that 'Z' plane if it
+     * exists, otherwise the center point is chosen.
+     * \param labelvol_name name of label volume type
+     * \param bodyid body id being queried
+     * \param zplane restrict body location to this plane
+     * \return point representing body location
+    */  
+    PointXYZ get_body_location(std::string labelvol_name, uint64 bodyid,
+           int zplane=INT_MAX);
+
+    /*!
+     * Retrieve coarse volume for given body ID as a vector
+     * of blocks in block coordinates.
+     * \param labelvol_name name of label volume type
+     * \param bodyid body id being queried
+     * \param blockcoords vector of block coordinates retrieved for body
+     * \return false if body does not exist
+    */
+    bool get_coarse_body(std::string labelvol_name, uint64 bodyid,
+            std::vector<BlockXYZ>& blockcoords);
 
   private:
-    //! uuid for instance
-    const UUID uuid;
-    
     //! HTTP connection with DVID
     DVIDConnection connection;
+    
+    //! uuid for instance
+    const UUID uuid;
 
     /*!
      * Helper function to put a 3D volume to DVID with the specified
@@ -511,7 +627,7 @@ class DVIDNodeService {
      * \param roi specify DVID roi to mask PUT operation (default: empty)
     */
     void put_volume(std::string datatype_instance, BinaryDataPtr volume,
-            std::vector<unsigned int> sizes, std::vector<unsigned int> offset,
+            std::vector<unsigned int> sizes, std::vector<int> offset,
             bool throttle, bool compress, std::string roi);
 
     /*!
@@ -522,7 +638,7 @@ class DVIDNodeService {
      * \return binary data corresponding to an array of blocks
     */
     BinaryDataPtr get_blocks(std::string datatype_instance,
-        std::vector<unsigned int> block_coords, int span);
+        std::vector<int> block_coords, int span);
 
     /*!
      * Helper to put blocks from DVID for labels and grayscale.
@@ -532,15 +648,17 @@ class DVIDNodeService {
      * \param block_coord starting block in DVID block coordinates
     */
     void put_blocks(std::string datatype_instance, BinaryDataPtr binary,
-            int span, std::vector<unsigned int> block_coords);
+            int span, std::vector<int> block_coords);
 
     /*!
      * Helper function to create an instance of the specified type.
      * \param datatype name of the datatype to create
      * \param datatype_name name of new datatype instance
+     * \param syn_name dataname to sync with if provided
      * \return true if create, false if already exists
     */
-    bool create_datatype(std::string datatype, std::string datatype_name);
+    bool create_datatype(std::string datatype, std::string datatype_name,
+            std::string sync_name = "");
 
     /*!
      * Checks if data exists for the given datatype name.
@@ -561,7 +679,7 @@ class DVIDNodeService {
      * \return byte buffer corresponding to volume
     */
     BinaryDataPtr get_volume3D(std::string datatype_inst, Dims_t sizes,
-        std::vector<unsigned int> offset, std::vector<unsigned int> channels,
+        std::vector<int> offset, std::vector<unsigned int> channels,
         bool throttle, bool compress, std::string roi);
 
     /*!
@@ -576,7 +694,7 @@ class DVIDNodeService {
      * \param roi specify DVID roi to mask operation (default: empty)
     */
     std::string construct_volume_uri(std::string datatype_inst, Dims_t sizes,
-            std::vector<unsigned int> offset,
+            std::vector<int> offset,
             std::vector<unsigned int> channels, bool throttle, bool compress,
             std::string roi);
 };

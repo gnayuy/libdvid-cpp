@@ -1,2 +1,7 @@
 *.swp
 build
+.project
+.cproject
+.pydevproject
+*.pyc
+.settings
